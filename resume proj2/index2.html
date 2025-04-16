@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>FlowBlocks - Task Scheduler</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1f1c2c, #928dab);
+            color: #f1f1f1;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            padding: 2.5rem;
+            max-width: 550px;
+            width: 100%;
+            text-align: center;
+            transition: all 0.3s ease-in-out;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .task-input {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .task-input input,
+        .task-input button {
+            padding: 0.9rem;
+            font-size: 1rem;
+            border-radius: 12px;
+            border: none;
+            outline: none;
+            transition: 0.3s;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .task-input input {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .task-input input::placeholder {
+            color: #cccccc;
+        }
+
+        .task-input button {
+            background: linear-gradient(to right, #00e0ff, #00ffa3);
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .task-input button:hover {
+            opacity: 0.9;
+        }
+
+        ul#taskList {
+            list-style: none;
+            text-align: left;
+            margin: 1rem 0;
+            padding: 0;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        ul#taskList li {
+            background: rgba(255, 255, 255, 0.07);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            border-left: 3px solid #00ffa3;
+        }
+
+        ul#taskList li:nth-child(odd) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        #startTasksBtn {
+            margin-top: 1rem;
+            padding: 1rem;
+            font-size: 1rem;
+            background: #00ffa3;
+            color: #000;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        #startTasksBtn:hover {
+            background: #00e0ff;
+        }
+
+        .current-task h2 {
+            font-size: 1.2rem;
+            color: #e0e0e0;
+            margin-top: 2rem;
+        }
+
+        #taskTimer {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
+            color: #ffffff;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 FlowBlocks Scheduler</h1>
+        <form id="taskForm">
+            <div class="task-input">
+                <input type="text" placeholder="Task Name (e.g., Study DSA)" id="taskName" required />
+                <input type="number" placeholder="Duration (mins)" id="taskDuration" required />
+                <button type="submit">Add Task</button>
+            </div>
+        </form>
+        <ul id="taskList"></ul>
+
+        <button id="startTasksBtn">Start Schedule</button>
+
+        <div class="current-task">
+            <h2 id="currentTask">Waiting to start...</h2>
+            <div id="taskTimer">00:00</div>
+        </div>
+    </div>
+
+    <audio id="alarmSound" src="assets/notification.mp3" preload="auto"></audio>
+
+    <script>
+        const taskForm = document.getElementById('taskForm');
+        const taskList = document.getElementById('taskList');
+        const currentTask = document.getElementById('currentTask');
+        const taskTimer = document.getElementById('taskTimer');
+        const alarmSound = document.getElementById('alarmSound');
+        const startTasksBtn = document.getElementById('startTasksBtn');
+
+        let tasks = [];
+        let currentIndex = 0;
+        let timerInterval;
+        let remainingTime = 0;
+        let scheduleStarted = false;
+
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('taskName').value.trim();
+            const duration = parseInt(document.getElementById('taskDuration').value);
+            if (name && duration > 0) {
+                tasks.push({ name, duration });
+                updateTaskList();
+                taskForm.reset();
+            }
+        });
+
+        startTasksBtn.addEventListener('click', () => {
+            if (!scheduleStarted && tasks.length > 0) {
+                scheduleStarted = true;
+                startNextTask();
+            }
+        });
+
+        function updateTaskList() {
+            taskList.innerHTML = '';
+            tasks.forEach((task, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${task.name} - ${task.duration} min`;
+                if (index === currentIndex) li.style.fontWeight = 'bold';
+                taskList.appendChild(li);
+            });
+        }
+
+        function startNextTask() {
+            if (currentIndex < tasks.length) {
+                const task = tasks[currentIndex];
+                currentTask.textContent = `Current: ${task.name}`;
+                remainingTime = task.duration * 60;
+                updateTimerDisplay();
+                clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    remainingTime--;
+                    updateTimerDisplay();
+                    if (remainingTime <= 0) {
+                        clearInterval(timerInterval);
+                        alarmSound.play();
+                        showNotification(`${task.name} ended. Time for a break or next task.`);
+                        currentIndex++;
+                        setTimeout(startNextTask, 3000);
+                    }
+                }, 1000);
+            } else {
+                currentTask.textContent = 'All tasks completed! 🎉';
+                taskTimer.textContent = '00:00';
+            }
+            updateTaskList();
+        }
+
+        function updateTimerDisplay() {
+            const mins = String(Math.floor(remainingTime / 60)).padStart(2, '0');
+            const secs = String(remainingTime % 60).padStart(2, '0');
+            taskTimer.textContent = `${mins}:${secs}`;
+        }
+
+        function showNotification(message) {
+            if (Notification.permission === 'granted') {
+                new Notification(message);
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification(message);
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
